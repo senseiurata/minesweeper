@@ -1,3 +1,5 @@
+require 'yaml'
+
 class Game
   def initialize
     puts "Welcome to minesweeper!"
@@ -8,20 +10,37 @@ class Game
 
     until board.over == :lose || board.over == :win
       board.show
-      print "Pick a spot: "
-      selection = gets.chomp.split(" ").map { |str| Integer(str) }
-      print "Type 'd' to dig, Type 'f' to flag: "
+      print "Type 'd' to dig, 'f' to flag, 's' to save, 'l' to load: "
       action = gets.chomp
 
-      if action == "d"
-        board.get_tile(selection).reveal
-      else
-        board.get_tile(selection).flagged = !board.get_tile(selection).flagged
+      if action == "d" || action == "f"
+        print "Pick a spot: "
+        selection = gets.chomp.split(" ").map { |str| Integer(str) }
+        if action == "d"
+          board.get_tile(selection).reveal
+        elsif action == "f"
+          board.get_tile(selection).flagged = !board.get_tile(selection).flagged
+        end
+      elsif action == "s"
+        save_contents = board.to_yaml
+        f = File.open("save.txt", "w")
+        f.puts save_contents
+        f.close
+      elsif action == "l"
+        board_contents = File.read("save.txt")
+        board = YAML::load(board_contents)
       end
       game_over = board.over
     end
 
-    puts "#{game_over}"
+    board.reveal_mines
+    board.show
+
+    if game_over == :lose
+      puts "You lose!"
+    else
+      puts "You win!"
+    end
   end
 
 end
@@ -49,6 +68,14 @@ class Board
     @board
   end
 
+  def reveal_mines
+    ROWS.times do |row|
+      COLS.times do |col|
+        @board[row][col].revealed = true if @board[row][col].bombed
+      end
+    end
+  end
+
   def set_board_neighbors
     ROWS.times do |row|
       COLS.times do |col|
@@ -74,17 +101,21 @@ class Board
   end
 
   def over
+    ongoing = false
     ROWS.times do |row|
       COLS.times do |col|
-        p tile = @board[row][col]
-        "tile: #{tile.bombed} #{tile.revealed}"
+        tile = @board[row][col]
+        #p "tile: #{tile.bombed} #{tile.revealed}"
         return :lose if (tile.bombed && tile.revealed)
+        ongoing = true if !tile.bombed && !tile.revealed
       end
     end
 
-    return nil if !tile.bombed && !tile.revealed
-
-    :win
+    if ongoing
+      nil
+    else
+      :win
+    end
   end
 
   def show
@@ -118,15 +149,11 @@ class Board
   def get_tile(pos)
     @board[pos.first][pos.last]
   end
-
-  def update(pos)
-
-  end
 end
 
 class Tile
-  attr_accessor :neighbors, :bombed, :flagged
-  attr_reader :pos, :revealed
+  attr_accessor :neighbors, :bombed, :flagged, :revealed
+  attr_reader :pos
 
   def initialize(pos)
     @bombed = false
@@ -139,20 +166,19 @@ class Tile
   def status
     if @flagged
       return "F"
+    elsif @bombed && @revealed
+      return "*"
     elsif @revealed
       bomb_count = neighbor_bomb_count
       return bomb_count == 0 ? " " : neighbor_bomb_count
-    elsif @bombed
-      return "*"
     else
       return "-"
     end
   end
 
   def reveal
+    @revealed = true
     unless bombed
-      @revealed = true
-
       bomb_count = neighbor_bomb_count
 
       if bomb_count == 0
