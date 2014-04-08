@@ -1,11 +1,35 @@
 class Game
+  def initialize
+    puts "Welcome to minesweeper!"
+  end
+
+  def run
+    board = Board.new
+
+    until board.over == :lose || board.over == :win
+      board.show
+      print "Pick a spot: "
+      selection = gets.chomp.split(" ").map { |str| Integer(str) }
+      print "Type 'd' to dig, Type 'f' to flag: "
+      action = gets.chomp
+
+      if action == "d"
+        board.get_tile(selection).reveal
+      else
+        board.get_tile(selection).flagged = !board.get_tile(selection).flagged
+      end
+      game_over = board.over
+    end
+
+    puts "#{game_over}"
+  end
 
 end
 
 class Board
   ROWS = 9
   COLS = 9
-  BOMBS = 10
+  BOMBS = 4
 
   def initialize
     create
@@ -24,7 +48,6 @@ class Board
 
     @board
   end
-
 
   def set_board_neighbors
     ROWS.times do |row|
@@ -45,9 +68,23 @@ class Board
     end
 
     valid_positions.each do |pos|
-      tile.neighbors << @board[pos.first][pos.last]  #CAN we shovel into attr_writer
+      tile.neighbors << @board[pos.first][pos.last]
     end
 
+  end
+
+  def over
+    ROWS.times do |row|
+      COLS.times do |col|
+        p tile = @board[row][col]
+        "tile: #{tile.bombed} #{tile.revealed}"
+        return :lose if (tile.bombed && tile.revealed)
+      end
+    end
+
+    return nil if !tile.bombed && !tile.revealed
+
+    :win
   end
 
   def show
@@ -79,7 +116,6 @@ class Board
   end
 
   def get_tile(pos)
-#    "#{@board[pos.first][pos.last].neighbors}"
     @board[pos.first][pos.last]
   end
 
@@ -89,7 +125,7 @@ class Board
 end
 
 class Tile
-  attr_accessor :neighbors, :bombed
+  attr_accessor :neighbors, :bombed, :flagged
   attr_reader :pos, :revealed
 
   def initialize(pos)
@@ -101,19 +137,16 @@ class Tile
   end
 
   def status
-    if @bombed
-      return "*"
+    if @flagged
+      return "F"
     elsif @revealed
       bomb_count = neighbor_bomb_count
       return bomb_count == 0 ? " " : neighbor_bomb_count
+    elsif @bombed
+      return "*"
     else
       return "-"
     end
-    # else
-    #
-    # if bombed
-    #
-    # if flagged
   end
 
   def reveal
@@ -124,11 +157,10 @@ class Tile
 
       if bomb_count == 0
         @neighbors.each do |neighbor|
-          neighbor.reveal unless neighbor.revealed
+          neighbor.reveal unless (neighbor.revealed || neighbor.flagged)
         end
       end
     end
-
   end
 
   def neighbor_bomb_count
@@ -148,11 +180,6 @@ class Tile
   end
 end
 
-b = Board.new
-b.show
-
-input = gets.chomp.split(" ").map { |str| Integer(str) }
-
-b.get_tile(input).reveal
-
-b.show
+if __FILE__ == $PROGRAM_NAME
+  Game.new.run
+end
